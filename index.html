@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>우주 비행기 게임</title>
+    <style>
+        /* 전체 페이지 스타일링 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            position: relative;
+            font-family: Arial, sans-serif;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* 게임 컨테이너: 전체 화면에 게임 캔버스 배치 */
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 게임 캔버스: 전체 화면 꽉 채우기 */
+        #gameCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 9/16;  /* 모바일 세로 비율 */
+            width: auto;
+            height: auto;
+            touch-action: none;  /* 터치 이벤트 최적화 */
+            box-shadow: 0 0 20px rgba(0, 100, 255, 0.5);  /* 캔버스 주위에 파란색 글로우 효과 */
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 화면 방향에 따른 캔버스 크기 조정 */
+        @media (orientation: portrait) {
+            #gameCanvas {
+                width: 100%;
+                height: auto;
+            }
+        }
+
+        @media (orientation: landscape) {
+            #gameCanvas {
+                height: 100vh;
+                width: auto;
+            }
+        }
+
+        /* 컨트롤 버튼 컨테이너 */
+        .control-buttons {
+            position: fixed;
+            bottom: 5vh;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center; /* 중앙 정렬로 변경 */
+            padding: 0 10vw;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 컨트롤 버튼 스타일 */
+        .control-button {
+            width: 15vw;
+            height: 15vw;
+            max-width: 80px;
+            max-height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            pointer-events: auto;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        /* 버튼 호버 효과 (데스크톱) */
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        /* 버튼 활성화 효과 */
+        .control-button:active {
+            background: rgba(255, 255, 255, 0.7);
+            transform: scale(0.95);
+        }
+
+        /* 버튼 내 화살표 아이콘 */
+        .control-button::before {
+            content: attr(data-arrow);
+            pointer-events: none;
+        }
+
+        /* 재시작 버튼 스타일 */
+        #restartBtn {
+            display: none;
+            position: absolute;
+            left: 50%;
+            top: 60%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            font-size: 32px;
+            background: rgba(255, 255, 255, 0.4);
+            border: 3px solid white;
+            color: white;
+            border-radius: 50%;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* 재시작 버튼 펄스 애니메이션 */
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+            }
+            70% {
+                transform: translate(-50%, -50%) scale(1.05);
+                box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+            }
+        }
+
+        /* 게임 로드 화면 */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        #loadingScreen h1 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 36px;
+            text-align: center;
+            text-shadow: 0 0 10px #00f, 0 0 20px #00f, 0 0 30px #00f;
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #00f, 0 0 20px #00f;
+            }
+            to {
+                text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #00f, 0 0 40px #00f;
+            }
+        }
+
+        #loadingBar {
+            width: 80%;
+            max-width: 400px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 0, 255, 0.5);
+        }
+
+        #loadingProgress {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #ffff00);
+            transition: width 0.3s;
+        }
+
+        /* 인트로 비디오 컨테이너 스타일 */
+        #introContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            overflow: hidden;
+            opacity: 1;
+            transition: opacity 0.8s ease;
+        }
+
+        /* 인트로 비디오 스타일 */
+        #introVideo {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        /* 인트로 스킵 버튼 */
+        #skipIntro {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 2001;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        #skipIntro:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        #skipIntro:active {
+            background: rgba(255, 255, 255, 0.7);
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <!-- 인트로 비디오 -->
+    <div id="introContainer">
+        <video id="introVideo" playsinline muted>
+            <source src="intro.mp4" type="video/mp4">
+            브라우저가 비디오를 지원하지 않습니다.
+        </video>
+        <button id="skipIntro">SKIP</button>
+    </div>
+
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="control-buttons">
+            <!-- 재시작 버튼만 남기기 -->
+            <button id="restartBtn" class="control-button" data-arrow="↺"></button>
+        </div>
+    </div>
+    
+    <script>
+        // --- 인트로 비디오 처리 ---
+        const introContainer = document.getElementById("introContainer");
+        const introVideo = document.getElementById("introVideo");
+        const skipIntroBtn = document.getElementById("skipIntro");
+        const loadingScreen = document.getElementById("loadingScreen");
+
+        // 초기에 로딩 화면 숨기기
+        if (loadingScreen) {
+          loadingScreen.style.display = "none";
+        }
+
+        // 인트로 비디오 재생 시작
+        let introPlayed = false;
+        function playIntro() {
+          // 자동 재생 시도 - 재생 버튼 없이 바로 시작
+          introVideo.play().catch(error => {
+            console.error("비디오 자동 재생 실패:", error);
+            // 자동 재생 정책으로 인해 실패한 경우에도 게임으로 바로 넘어가도록 함
+            setTimeout(finishIntro, 500);
+          });
+        }
+
+        // 인트로 완료 시 게임으로 페이드 전환
+        function finishIntro() {
+          if (introPlayed) return; // 중복 실행 방지
+          introPlayed = true;
+          
+          // 인트로 비디오 페이드 아웃
+          let opacity = 1;
+          const fadeOutInterval = setInterval(() => {
+            opacity -= 0.05;
+            introContainer.style.opacity = opacity;
+            
+            if (opacity <= 0) {
+              clearInterval(fadeOutInterval);
+              introContainer.style.display = "none";
+              
+              // 이미지 로딩 화면 표시 및 페이드 인
+              if (loadingScreen) {
+                loadingScreen.style.opacity = 0;
+                loadingScreen.style.display = "flex";
+                
+                let loadingOpacity = 0;
+                const fadeInInterval = setInterval(() => {
+                  loadingOpacity += 0.05;
+                  loadingScreen.style.opacity = loadingOpacity;
+                  
+                  if (loadingOpacity >= 1) {
+                    clearInterval(fadeInInterval);
+                    // 원래 게임 로딩 로직 계속 진행
+                    checkImagesLoaded();
+                  }
+                }, 30);
+              } else {
+                // 로딩 화면이 없는 경우 바로 게임 로딩
+                checkImagesLoaded();
+              }
+            }
+          }, 30);
+        }
+
+        // 스킵 버튼 이벤트
+        skipIntroBtn.addEventListener("click", finishIntro);
+
+        // 비디오 종료 이벤트
+        introVideo.addEventListener("ended", finishIntro);
+
+        // --- 1) 이미지 프리로드 ---
+        const ASSETS = {
+          bg:  "background.png",
+          p:   "player.png",
+          e1:  "enemy1.png",
+          e2:  "enemy2.png",
+          h1:  "health_item1.png",
+          h2:  "health_item2.png"
+        };
+        const IMG = {};
+        let loadedCount = 0;
+        const TOTAL_ASSETS = Object.keys(ASSETS).length;
+
+        // 이미지 로딩 상태 확인 함수
+        function checkImagesLoaded() {
+          for (const key in ASSETS) {
+            IMG[key] = new Image();
+            IMG[key].src = ASSETS[key];
+            IMG[key].onload = () => {
+              if (++loadedCount === TOTAL_ASSETS) initGame();
+            };
+            IMG[key].onerror = () => {
+              console.log("이미지 로드 실패: ", ASSETS[key]);
+              // 이미지 로드 실패해도 게임 시작하도록 처리
+              if (++loadedCount === TOTAL_ASSETS) initGame();
+            };
+          }
+          
+          // 모든 이미지가 아직, 로드되지 않았다면 5초 후 강제 시작
+          setTimeout(function() {
+            if (!gameOver && !player) {
+              console.log("강제 게임 시작");
+              initGame();
+            }
+          }, 5000);
+        }
+
+        // --- 2) 캔버스 설정 ---
+        const canvas = document.getElementById("gameCanvas");
+        const ctx    = canvas.getContext("2d");
+        canvas.width  = 800;
+        canvas.height = 600;
+
+        // --- 3) 상수 정의 ---
+        const PLAYER_SIZE   = 130;
+        const ENEMY_SIZE    = 110;    // 적 크기
+        const ITEM_SIZE     = 110;
+        const ITEM_INTERVAL = 10000; // 10초마다 아이템
+        const BASE_SHOT_INT = 500;   // 자동 발사 기본 간격(ms)
+        const SPEED_FACTOR  = 0.02;  // 적 속도 증가 비율 (초당)
+
+        // --- 4) 상태 변수 ---
+        let player, enemies, missiles, items;
+        let playerEnergy, score, gameOver;
+        let missileCount, missilePickups, shotInterval;
+        let lastItemTime, lastShotTime, startTime;
+
+        // 터치/마우스 위치 변수
+        let touchX = null;
+        let touchY = null;
+        let isTouching = false;
+
+        // --- 5) 키 입력 & 버튼 이벤트 ---
+        const keys = {};
+        window.addEventListener("keydown", e => keys[e.key] = true);
+        window.addEventListener("keyup",   e => keys[e.key] = false);
+
+        // 재시작 버튼 이벤트 리스너
+        const restartBtn = document.getElementById("restartBtn");
+        if (restartBtn) {
+          restartBtn.addEventListener("click", function() {
+            this.style.display = "none";
+            initGame();
+          });
+        }
+
+        // 터치/마우스 이벤트 리스너
+        canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+        canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+        canvas.addEventListener("touchend", handleTouchEnd);
+        canvas.addEventListener("mousedown", handleMouseDown);
+        canvas.addEventListener("mousemove", handleMouseMove);
+        canvas.addEventListener("mouseup", handleMouseUp);
+
+        function handleTouchStart(e) {
+          e.preventDefault();
+          isTouching = true;
+          const touch = e.touches[0];
+          const rect = canvas.getBoundingClientRect();
+          touchX = touch.clientX - rect.left;
+          touchY = touch.clientY - rect.top;
+        }
+
+        function handleTouchMove(e) {
+          if (!isTouching) return;
+          e.preventDefault();
+          const touch = e.touches[0];
+          const rect = canvas.getBoundingClientRect();
+          touchX = touch.clientX - rect.left;
+          touchY = touch.clientY - rect.top;
+        }
+
+        function handleTouchEnd() {
+          isTouching = false;
+        }
+
+        function handleMouseDown(e) {
+          isTouching = true;
+          const rect = canvas.getBoundingClientRect();
+          touchX = e.clientX - rect.left;
+          touchY = e.clientY - rect.top;
+        }
+
+        function handleMouseMove(e) {
+          if (!isTouching) return;
+          const rect = canvas.getBoundingClientRect();
+          touchX = e.clientX - rect.left;
+          touchY = e.clientY - rect.top;
+        }
+
+        function handleMouseUp() {
+          isTouching = false;
+        }
+
+        window.addEventListener("keydown", e => {
+          if (e.key === " ") shootMissile();
+        });
+
+        // --- 6) 클래스 정의 ---
+        class Player {
+          constructor() {
+            this.w  = PLAYER_SIZE;
+            this.h  = PLAYER_SIZE;
+            this.x  = canvas.width/2 - this.w/2;
+            this.y  = canvas.height - this.h - 10;
+            this.sp = 5;
+          }
+          move() {
+            // 터치/마우스 드래그로 이동 (모바일)
+            if (isTouching && touchX !== null && touchY !== null) {
+              const targetX = touchX - this.w / 2;
+              const targetY = touchY - this.h / 2;
+              
+              // 부드러운 이동을 위한 보간
+              this.x += (targetX - this.x) * 0.1;
+              this.y += (targetY - this.y) * 0.1;
+              
+              // 경계 확인
+              this.x = Math.max(0, Math.min(canvas.width - this.w, this.x));
+              this.y = Math.max(0, Math.min(canvas.height - this.h, this.y));
+            }
+            
+            // 키보드로 이동 (웹)
+            if (keys["ArrowLeft"] && this.x > 0)
+              this.x -= this.sp;
+            if (keys["ArrowRight"] && this.x < canvas.width - this.w)
+              this.x += this.sp;
+            if (keys["ArrowUp"] && this.y > 0)
+              this.y -= this.sp;
+            if (keys["ArrowDown"] && this.y < canvas.height - this.h)
+              this.y += this.sp;
+          }
+          draw() {
+            // 이미지가 로드 안됐으면 기본 사각형으로 표시
+            if (IMG.p && IMG.p.complete) {
+              ctx.drawImage(IMG.p, this.x, this.y, this.w, this.h);
+            } else {
+              ctx.fillStyle = "blue";
+              ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
+          }
+        }
+
+        class Missile {
+          constructor(x, y, ang = 0) {
+            this.x = x;
+            this.y = y;
+            this.w = 8;
+            this.h = 16;
+            this.sp  = 8;
+            this.ang = ang * Math.PI/180;
+          }
+          move() {
+            this.y -= this.sp;
+            this.x += Math.sin(this.ang) * 5;
+          }
+          draw() {
+            ctx.fillStyle = "red";
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+          }
+        }
+
+        class Enemy {
+          constructor(type) {
+            this.w      = ENEMY_SIZE;
+            this.h      = ENEMY_SIZE;
+            this.x      = Math.random() * (canvas.width - this.w);
+            this.y      = -this.h;
+            this.type   = type;       // 1 또는 2
+            this.health = type;       // 체력: 1 or 2
+            this.baseSp = 1;          // 기본 속도
+          }
+          move(now) {
+            const elapsed = (now - startTime) / 1000;
+            const speed   = this.baseSp + elapsed * SPEED_FACTOR;
+            this.y += speed;
+          }
+          draw() {
+            // 이미지가 로드 안됐으면 기본 사각형으로 표시
+            const img = this.type === 1 ? IMG.e1 : IMG.e2;
+            if (img && img.complete) {
+              ctx.drawImage(img, this.x, this.y, this.w, this.h);
+            } else {
+              ctx.fillStyle = this.type === 1 ? "purple" : "darkred";
+              ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
+          }
+        }
+
+        class Item {
+          constructor() {
+            this.w    = ITEM_SIZE;
+            this.h    = ITEM_SIZE;
+            this.x    = Math.random() * (canvas.width - this.w);
+            this.y    = -this.h;
+            this.sp   = 3;
+            this.type = Math.random() < 0.5 ? "health" : "missile";
+          }
+          move() {
+            this.y += this.sp;
+          }
+          draw() {
+            // 이미지가 로드 안됐으면 기본 사각형으로 표시
+            const img = this.type === "health" ? IMG.h1 : IMG.h2;
+            if (img && img.complete) {
+              ctx.drawImage(img, this.x, this.y, this.w, this.h);
+            } else {
+              ctx.fillStyle = this.type === "health" ? "green" : "orange";
+              ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
+          }
+        }
+
+        // --- 7) 충돌 검사 & 발사 함수 ---
+        function isCollision(a, b) {
+          return a.x < b.x + b.w &&
+                 a.x + a.w > b.x &&
+                 a.y < b.y + b.h &&
+                 a.y + a.h > b.y;
+        }
+        function shootMissile() {
+          const sx = player.x + player.w/2 - 4;
+          const sy = player.y;
+          if (missileCount === 1) {
+            missiles.push(new Missile(sx, sy));
+          } else {
+            for (let i = 0; i < missileCount; i++) {
+              const ang = (i - (missileCount-1)/2) * 15;
+              missiles.push(new Missile(sx, sy, ang));
+            }
+          }
+        }
+
+        // --- 8) 게임 초기화 ---
+        function initGame() {
+          player         = new Player();
+          enemies        = [];
+          missiles       = [];
+          items          = [];
+          playerEnergy   = 100;
+          score          = 0;
+          gameOver       = false;
+          missileCount   = 1;
+          missilePickups = 0;
+          shotInterval   = BASE_SHOT_INT;
+          startTime      = performance.now();
+          lastItemTime   = startTime;
+          lastShotTime   = startTime;
+          
+          // 게임 캔버스 페이드 인 효과
+          canvas.style.opacity = 0;
+          
+          // 로딩 화면 페이드 아웃 후 게임 화면 페이드 인
+          if (loadingScreen) {
+            let loadingOpacity = 1;
+            const fadeOutInterval = setInterval(() => {
+              loadingOpacity -= 0.05;
+              loadingScreen.style.opacity = loadingOpacity;
+              
+              if (loadingOpacity <= 0) {
+                clearInterval(fadeOutInterval);
+                loadingScreen.style.display = "none";
+                
+                // 게임 캔버스 페이드 인
+                let canvasOpacity = 0;
+                const fadeInInterval = setInterval(() => {
+                  canvasOpacity += 0.05;
+                  canvas.style.opacity = canvasOpacity;
+                  
+                  if (canvasOpacity >= 1) {
+                    clearInterval(fadeInInterval);
+                  }
+                }, 30);
+                
+                // 게임 시작
+                requestAnimationFrame(gameLoop);
+              }
+            }, 30);
+          } else {
+            // 로딩 화면이 없는 경우 바로 게임 캔버스 페이드 인
+            let canvasOpacity = 0;
+            const fadeInInterval = setInterval(() => {
+              canvasOpacity += 0.05;
+              canvas.style.opacity = canvasOpacity;
+              
+              if (canvasOpacity >= 1) {
+                clearInterval(fadeInInterval);
+              }
+            }, 30);
+            
+            // 재시작 버튼 숨기기
+            if (restartBtn) {
+              restartBtn.style.display = "none";
+            }
+            
+            // 게임 시작
+            requestAnimationFrame(gameLoop);
+          }
+        }
+
+        // --- 9) 화면 그리기 헬퍼 ---
+        function drawBackground() {
+          // 배경 이미지가 로드 안됐으면 기본 사각형으로 표시
+          if (IMG.bg && IMG.bg.complete) {
+            ctx.drawImage(IMG.bg, 0, 0, canvas.width, canvas.height);
+          } else {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+        }
+        function drawUI() {
+          ctx.fillStyle = "gray";
+          ctx.fillRect(20, 20, 200, 20);
+          ctx.fillStyle = "limegreen";
+          ctx.fillRect(20, 20, (playerEnergy/100)*200, 20);
+          ctx.strokeStyle = "black";
+          ctx.strokeRect(20, 20, 200, 20);
+          ctx.font = "20px Arial";
+          ctx.fillStyle = "white";
+          ctx.textAlign = "right";
+          ctx.fillText("점수: " + score, canvas.width - 20, 40);
+        }
+
+        // --- 10) 메인 루프 ---
+        function gameLoop(now) {
+          // 1) 배경 & UI
+          drawBackground();
+          drawUI();
+
+          // 2) 자동 미사일 발사
+          if (now - lastShotTime >= shotInterval) {
+            shootMissile();
+            lastShotTime = now;
+          }
+
+          // 3) 플레이어
+          player.move();
+          player.draw();
+
+          // 4) 적 스폰
+          if (Math.random() < 0.02) {
+            enemies.push(new Enemy(Math.random() < 0.5 ? 1 : 2));
+          }
+
+          // 5) 아이템 10초마다 스폰
+          if (now - lastItemTime >= ITEM_INTERVAL) {
+            items.push(new Item());
+            lastItemTime = now;
+          }
+
+          // 6) 적 처리
+          for (let i = enemies.length-1; i >= 0; i--) {
+            const e = enemies[i];
+            e.move(now);
+            e.draw();
+            if (e.y > canvas.height) { enemies.splice(i, 1); continue; }
+
+            if (isCollision(player, e)) {
+              playerEnergy -= 20;
+              enemies.splice(i, 1);
+              if (playerEnergy <= 0) gameOver = true;
+              continue;
+            }
+            for (let j = missiles.length-1; j >= 0; j--) {
+              if (isCollision(missiles[j], e)) {
+                missiles.splice(j, 1);
+                e.health--;
+                if (e.health <= 0) {
+                  score++;
+                  enemies.splice(i, 1);
+                }
+                break;
+              }
+            }
+          }
+
+          // 7) 아이템 처리
+          for (let i = items.length-1; i >= 0; i--) {
+            const it = items[i];
+            it.move();
+            it.draw();
+            if (it.y > canvas.height) { items.splice(i, 1); continue; }
+
+            if (isCollision(player, it)) {
+              if (it.type === "health") {
+                playerEnergy = Math.min(100, playerEnergy + 30);
+              } else {
+                missilePickups = Math.min(3, missilePickups + 1);
+                if (missilePickups === 1) {
+                  shotInterval = BASE_SHOT_INT / 2;
+                } else if (missilePickups === 2) {
+                  missileCount = 2;
+                } else if (missilePickups === 3) {
+                  missileCount = 3;
+                }
+              }
+              items.splice(i, 1);
+            }
+          }
+
+          // 8) 미사일 처리
+          for (let i = missiles.length-1; i >= 0; i--) {
+            missiles[i].move();
+            missiles[i].draw();
+            if (missiles[i].y < -missiles[i].h) missiles.splice(i, 1);
+          }
+
+          // 9) 게임 오버
+          if (gameOver) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = "white";
+            ctx.font = "40px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("게임 오버!", canvas.width/2, canvas.height/2 - 40);
+            ctx.font = "30px Arial";
+            ctx.fillText("최종 점수: " + score, canvas.width/2, canvas.height/2);
+            
+            // 재시작 버튼 표시
+            if (restartBtn) {
+              restartBtn.style.display = "flex";
+              restartBtn.style.position = "absolute";
+              restartBtn.style.left = "50%";
+              restartBtn.style.top = "60%";
+              restartBtn.style.transform = "translate(-50%, -50%)";
+              restartBtn.style.fontSize = "32px";
+              restartBtn.style.width = "120px";
+              restartBtn.style.height = "120px";
+            }
+            
+            return; // 루프 완전 종료
+          }
+
+          // 10) 다음 프레임
+          requestAnimationFrame(gameLoop);
+        }
+
+        // 페이지 로드 완료 시 초기화
+        window.addEventListener('load', function() {
+          console.log("페이지 로드 완료");
+          
+          // 모바일 디바이스 감지 및 UI 힌트 표시
+          if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            // 모바일 디바이스일 경우 수행할 작업
+            const touchHint = document.createElement('div');
+            touchHint.id = 'touchHint';
+            touchHint.innerHTML = '👆 화면을 터치하고 드래그하여 비행기를 이동하세요';
+            touchHint.style.position = 'fixed';
+            touchHint.style.bottom = '20vh';
+            touchHint.style.left = '0';
+            touchHint.style.width = '100%';
+            touchHint.style.textAlign = 'center';
+            touchHint.style.color = 'white';
+            touchHint.style.fontSize = '16px';
+            touchHint.style.padding = '10px';
+            touchHint.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            touchHint.style.zIndex = '100';
+            touchHint.style.opacity = '0';
+            touchHint.style.transition = 'opacity 1s ease';
+            
+            document.body.appendChild(touchHint);
+            
+            // 게임 시작 후 힌트 표시 및 자동 숨김
+            setTimeout(() => {
+              touchHint.style.opacity = '1';
+              setTimeout(() => {
+                touchHint.style.opacity = '0';
+                setTimeout(() => {
+                  touchHint.remove();
+                }, 1000);
+              }, 5000);
+            }, 3000);
+          }
+          
+          // 인트로 시작
+          playIntro();
+        });
+    </script>
+</body>
+</html>
