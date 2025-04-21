@@ -39,8 +39,8 @@
             height: auto;
             touch-action: none;  /* 터치 이벤트 최적화 */
             box-shadow: 0 0 20px rgba(0, 100, 255, 0.5);  /* 캔버스 주위에 파란색 글로우 효과 */
-            opacity: 1;
-            transition: opacity 0.5s ease;
+            opacity: 0; /* 처음에는 완전히 투명하게 시작 */
+            transition: opacity 2s ease; /* 전환 효과 2초로 설정 */
         }
 
         /* 화면 방향에 따른 캔버스 크기 조정 */
@@ -146,41 +146,6 @@
             }
         }
 
-        /* 로딩 화면 - 간소화 */
-        #loadingScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            opacity: 1;
-            transition: opacity 0.5s ease;
-        }
-
-        #loadingScreen h1 {
-            color: white;
-            margin-bottom: 20px;
-            font-size: 36px;
-            text-align: center;
-            text-shadow: 0 0 10px #00f, 0 0 20px #00f, 0 0 30px #00f;
-            animation: glow 1.5s ease-in-out infinite alternate;
-        }
-
-        @keyframes glow {
-            from {
-                text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #00f, 0 0 20px #00f;
-            }
-            to {
-                text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #00f, 0 0 40px #00f;
-            }
-        }
-
         /* 인트로 비디오 컨테이너 스타일 */
         #introContainer {
             position: fixed;
@@ -195,7 +160,7 @@
             z-index: 2000;
             overflow: hidden;
             opacity: 1;
-            transition: opacity 0.8s ease;
+            transition: opacity 2.5s ease; /* 페이드 효과 2.5초로 설정 */
         }
 
         /* 인트로 비디오 스타일 */
@@ -245,11 +210,6 @@
         <button id="skipIntro">SKIP</button>
     </div>
 
-    <!-- 로딩 화면 (간소화) -->
-    <div id="loadingScreen">
-        <h1>우주 비행기 게임</h1>
-    </div>
-
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
         <div class="control-buttons">
@@ -263,50 +223,58 @@
         const introContainer = document.getElementById("introContainer");
         const introVideo = document.getElementById("introVideo");
         const skipIntroBtn = document.getElementById("skipIntro");
-        const loadingScreen = document.getElementById("loadingScreen");
-
-        // 초기에 로딩 화면 숨기기
-        if (loadingScreen) {
-          loadingScreen.style.display = "none";
-        }
+        const canvas = document.getElementById("gameCanvas");
 
         // 인트로 비디오 재생 시작
         let introPlayed = false;
+        let transitionStarted = false;
+        
         function playIntro() {
           // 자동 재생 시도
           introVideo.play().catch(error => {
             console.error("비디오 자동 재생 실패:", error);
             // 자동 재생 정책으로 인해 실패한 경우에도 게임으로 바로 넘어가도록 함
-            setTimeout(finishIntro, 500);
+            setTimeout(startFadeTransition, 500);
+          });
+          
+          // 5초 영상이면 2.5초 정도에 페이드 아웃 시작
+          introVideo.addEventListener('timeupdate', function() {
+            // 영상 길이 확인
+            const videoDuration = introVideo.duration;
+            // 영상 현재 시간
+            const currentTime = introVideo.currentTime;
+            
+            // 영상의 절반 지점에서 페이드 아웃 시작
+            if (currentTime >= videoDuration * 0.5 && !transitionStarted) {
+              transitionStarted = true;
+              startFadeTransition();
+            }
           });
         }
 
-        // 인트로 완료 시 게임으로 곧바로 전환
-        function finishIntro() {
+        // 페이드 트랜지션 시작
+        function startFadeTransition() {
           if (introPlayed) return; // 중복 실행 방지
           introPlayed = true;
           
-          // 인트로 비디오 페이드 아웃
-          let opacity = 1;
-          const fadeOutInterval = setInterval(() => {
-            opacity -= 0.05;
-            introContainer.style.opacity = opacity;
-            
-            if (opacity <= 0) {
-              clearInterval(fadeOutInterval);
-              introContainer.style.display = "none";
-              
-              // 게임 초기화 (로딩 화면 없이 바로 시작)
-              checkImagesLoaded();
-            }
-          }, 30);
+          // 인트로 비디오 페이드 아웃 - 2.5초 동안 진행
+          introContainer.style.opacity = "0";
+          
+          // 이미지 프리로드 시작
+          setTimeout(() => {
+            checkImagesLoaded();
+          }, 2000); // 2초 후 이미지 로딩 시작 (영상이 완전히 투명해진 이후)
         }
 
         // 스킵 버튼 이벤트
-        skipIntroBtn.addEventListener("click", finishIntro);
-
-        // 비디오 종료 이벤트
-        introVideo.addEventListener("ended", finishIntro);
+        skipIntroBtn.addEventListener("click", startFadeTransition);
+        
+        // 비디오 종료 이벤트 (자동 처리를 위해 남겨둠)
+        introVideo.addEventListener("ended", () => {
+          if (!transitionStarted) {
+            startFadeTransition();
+          }
+        });
 
         // --- 1) 이미지 프리로드 ---
         const ASSETS = {
@@ -323,6 +291,11 @@
 
         // 이미지 로딩 상태 확인 함수
         function checkImagesLoaded() {
+          // 인트로 컨테이너 완전히 제거 (z-index 영향 없애기)
+          setTimeout(() => {
+            introContainer.style.display = "none";
+          }, 500);
+          
           for (const key in ASSETS) {
             IMG[key] = new Image();
             IMG[key].src = ASSETS[key];
@@ -346,8 +319,7 @@
         }
 
         // --- 2) 캔버스 설정 ---
-        const canvas = document.getElementById("gameCanvas");
-        const ctx    = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d");
         canvas.width  = 800;
         canvas.height = 600;
 
@@ -368,6 +340,8 @@
         let canvasAspectRatio = canvas.width / canvas.height; // 캔버스 비율 계산
         let moveSpeedX = MOVE_SPEED; // 기본 X축 이동 속도
         let moveSpeedY = MOVE_SPEED; // 기본 Y축 이동 속도
+        let canvasXRatio = 1; // 캔버스 X 축 비율
+        let canvasYRatio = 1; // 캔버스 Y 축 비율
 
         // 터치/마우스 위치 변수
         let touchX = null;
@@ -716,39 +690,10 @@
           // 화면 비율에 따른 이동 속도 조정
           updateCanvasRatio();
           
-          // 게임 캔버스 페이드 인 효과
-          canvas.style.opacity = 0;
-          
-          // 로딩 화면이 보이는 경우 페이드 아웃
-          if (loadingScreen && loadingScreen.style.display === "flex") {
-            let loadingOpacity = 1;
-            const fadeOutInterval = setInterval(() => {
-              loadingOpacity -= 0.05;
-              loadingScreen.style.opacity = loadingOpacity;
-              
-              if (loadingOpacity <= 0) {
-                clearInterval(fadeOutInterval);
-                loadingScreen.style.display = "none";
-                fadeInCanvas();
-              }
-            }, 30);
-          } else {
-            // 로딩 화면이 안 보이는 경우 바로 캔버스 페이드 인
-            fadeInCanvas();
-          }
-        }
-        
-        // 캔버스 페이드 인 함수
-        function fadeInCanvas() {
-          let canvasOpacity = 0;
-          const fadeInInterval = setInterval(() => {
-            canvasOpacity += 0.05;
-            canvas.style.opacity = canvasOpacity;
-            
-            if (canvasOpacity >= 1) {
-              clearInterval(fadeInInterval);
-            }
-          }, 30);
+          // 게임 캔버스 페이드 인 시작 - 2초에 걸쳐 천천히 나타나기
+          setTimeout(() => {
+            canvas.style.opacity = "1";
+          }, 500); // 약간의 지연 후 페이드 인 시작
           
           // 재시작 버튼 숨기기
           if (restartBtn) {
