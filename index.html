@@ -65,7 +65,7 @@
             left: 0;
             right: 0;
             display: flex;
-            justify-content: center; /* 중앙 정렬로 변경 */
+            justify-content: center;
             padding: 0 10vw;
             pointer-events: none;
             z-index: 10;
@@ -146,7 +146,7 @@
             }
         }
 
-        /* 게임 로드 화면 */
+        /* 로딩 화면 - 간소화 */
         #loadingScreen {
             position: fixed;
             top: 0;
@@ -179,23 +179,6 @@
             to {
                 text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #00f, 0 0 40px #00f;
             }
-        }
-
-        #loadingBar {
-            width: 80%;
-            max-width: 400px;
-            height: 20px;
-            background: #333;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 10px rgba(0, 0, 255, 0.5);
-        }
-
-        #loadingProgress {
-            width: 0%;
-            height: 100%;
-            background: linear-gradient(90deg, #00ff00, #ffff00);
-            transition: width 0.3s;
         }
 
         /* 인트로 비디오 컨테이너 스타일 */
@@ -262,10 +245,15 @@
         <button id="skipIntro">SKIP</button>
     </div>
 
+    <!-- 로딩 화면 (간소화) -->
+    <div id="loadingScreen">
+        <h1>우주 비행기 게임</h1>
+    </div>
+
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
         <div class="control-buttons">
-            <!-- 재시작 버튼만 남기기 -->
+            <!-- 재시작 버튼만 유지 -->
             <button id="restartBtn" class="control-button" data-arrow="↺"></button>
         </div>
     </div>
@@ -285,7 +273,7 @@
         // 인트로 비디오 재생 시작
         let introPlayed = false;
         function playIntro() {
-          // 자동 재생 시도 - 재생 버튼 없이 바로 시작
+          // 자동 재생 시도
           introVideo.play().catch(error => {
             console.error("비디오 자동 재생 실패:", error);
             // 자동 재생 정책으로 인해 실패한 경우에도 게임으로 바로 넘어가도록 함
@@ -293,7 +281,7 @@
           });
         }
 
-        // 인트로 완료 시 게임으로 페이드 전환
+        // 인트로 완료 시 게임으로 곧바로 전환
         function finishIntro() {
           if (introPlayed) return; // 중복 실행 방지
           introPlayed = true;
@@ -308,26 +296,8 @@
               clearInterval(fadeOutInterval);
               introContainer.style.display = "none";
               
-              // 이미지 로딩 화면 표시 및 페이드 인
-              if (loadingScreen) {
-                loadingScreen.style.opacity = 0;
-                loadingScreen.style.display = "flex";
-                
-                let loadingOpacity = 0;
-                const fadeInInterval = setInterval(() => {
-                  loadingOpacity += 0.05;
-                  loadingScreen.style.opacity = loadingOpacity;
-                  
-                  if (loadingOpacity >= 1) {
-                    clearInterval(fadeInInterval);
-                    // 원래 게임 로딩 로직 계속 진행
-                    checkImagesLoaded();
-                  }
-                }, 30);
-              } else {
-                // 로딩 화면이 없는 경우 바로 게임 로딩
-                checkImagesLoaded();
-              }
+              // 게임 초기화 (로딩 화면 없이 바로 시작)
+              checkImagesLoaded();
             }
           }, 30);
         }
@@ -388,17 +358,49 @@
         const ITEM_INTERVAL = 10000; // 10초마다 아이템
         const BASE_SHOT_INT = 500;   // 자동 발사 기본 간격(ms)
         const SPEED_FACTOR  = 0.02;  // 적 속도 증가 비율 (초당)
+        const MOVE_SPEED    = 8;     // 기본 이동 속도
 
         // --- 4) 상태 변수 ---
         let player, enemies, missiles, items;
         let playerEnergy, score, gameOver;
         let missileCount, missilePickups, shotInterval;
         let lastItemTime, lastShotTime, startTime;
+        let canvasAspectRatio = canvas.width / canvas.height; // 캔버스 비율 계산
+        let moveSpeedX = MOVE_SPEED; // 기본 X축 이동 속도
+        let moveSpeedY = MOVE_SPEED; // 기본 Y축 이동 속도
 
         // 터치/마우스 위치 변수
         let touchX = null;
         let touchY = null;
+        let lastTouchX = null; // 이전 터치 X 위치
+        let lastTouchY = null; // 이전 터치 Y 위치
         let isTouching = false;
+        let touchMoveDistance = 0; // 터치 움직임 거리
+        
+        // 캔버스 크기와 실제 표시되는 크기 비율 계산 함수
+        function updateCanvasRatio() {
+            const canvasRect = canvas.getBoundingClientRect();
+            const displayWidth = canvasRect.width;
+            const displayHeight = canvasRect.height;
+            
+            // 실제 캔버스 크기와 화면에 표시되는 크기의 비율 계산
+            canvasXRatio = canvas.width / displayWidth;
+            canvasYRatio = canvas.height / displayHeight;
+            
+            // 화면 비율에 따라 이동 속도 조정
+            if (canvasXRatio > canvasYRatio) {
+                // 너비가 상대적으로 더 크게 줄어든 경우 (가로가 더 넓게 보임)
+                moveSpeedX = MOVE_SPEED * (canvasYRatio / canvasXRatio);
+                moveSpeedY = MOVE_SPEED;
+            } else {
+                // 높이가 상대적으로 더 크게 줄어든 경우 (세로가 더 높게 보임)
+                moveSpeedX = MOVE_SPEED;
+                moveSpeedY = MOVE_SPEED * (canvasXRatio / canvasYRatio);
+            }
+            
+            console.log(`Canvas ratio - X: ${canvasXRatio}, Y: ${canvasYRatio}`);
+            console.log(`Move speed - X: ${moveSpeedX}, Y: ${moveSpeedY}`);
+        }
 
         // --- 5) 키 입력 & 버튼 이벤트 ---
         const keys = {};
@@ -421,6 +423,9 @@
         canvas.addEventListener("mousedown", handleMouseDown);
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("mouseup", handleMouseUp);
+        
+        // 화면 리사이즈 이벤트
+        window.addEventListener("resize", updateCanvasRatio);
 
         function handleTouchStart(e) {
           e.preventDefault();
@@ -429,6 +434,24 @@
           const rect = canvas.getBoundingClientRect();
           touchX = touch.clientX - rect.left;
           touchY = touch.clientY - rect.top;
+          
+          // 좌표 변환: 화면 좌표를 캔버스 좌표로 변환
+          const canvasX = (touchX * canvas.width) / rect.width;
+          const canvasY = (touchY * canvas.height) / rect.height;
+          
+          // 이전 위치 저장 (첫 터치)
+          lastTouchX = canvasX;
+          lastTouchY = canvasY;
+          
+          // 터치 위치로 즉시 이동
+          player.x = canvasX - player.w / 2;
+          player.y = canvasY - player.h / 2;
+          
+          // 경계 확인
+          player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+          player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+          
+          touchMoveDistance = 0;
         }
 
         function handleTouchMove(e) {
@@ -436,12 +459,45 @@
           e.preventDefault();
           const touch = e.touches[0];
           const rect = canvas.getBoundingClientRect();
+          
+          // 이전 터치 위치 저장
+          const prevX = touchX;
+          const prevY = touchY;
+          
+          // 새 터치 위치 업데이트
           touchX = touch.clientX - rect.left;
           touchY = touch.clientY - rect.top;
+          
+          // 좌표 변환: 화면 좌표를 캔버스 좌표로 변환
+          const canvasX = (touchX * canvas.width) / rect.width;
+          const canvasY = (touchY * canvas.height) / rect.height;
+          
+          // 이전 터치와의 거리 계산
+          if (lastTouchX !== null && lastTouchY !== null) {
+            const deltaX = canvasX - lastTouchX;
+            const deltaY = canvasY - lastTouchY;
+            
+            // 비율에 맞게 이동 속도 적용
+            player.x += deltaX;
+            player.y += deltaY;
+            
+            // 경계 확인
+            player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+            
+            // 움직인 거리 누적
+            touchMoveDistance += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          }
+          
+          // 현재 위치를 다음 계산을 위해 저장
+          lastTouchX = canvasX;
+          lastTouchY = canvasY;
         }
 
         function handleTouchEnd() {
           isTouching = false;
+          lastTouchX = null;
+          lastTouchY = null;
         }
 
         function handleMouseDown(e) {
@@ -449,17 +505,68 @@
           const rect = canvas.getBoundingClientRect();
           touchX = e.clientX - rect.left;
           touchY = e.clientY - rect.top;
+          
+          // 좌표 변환: 화면 좌표를 캔버스 좌표로 변환
+          const canvasX = (touchX * canvas.width) / rect.width;
+          const canvasY = (touchY * canvas.height) / rect.height;
+          
+          // 이전 위치 저장 (첫 클릭)
+          lastTouchX = canvasX;
+          lastTouchY = canvasY;
+          
+          // 클릭 위치로 즉시 이동
+          player.x = canvasX - player.w / 2;
+          player.y = canvasY - player.h / 2;
+          
+          // 경계 확인
+          player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+          player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+          
+          touchMoveDistance = 0;
         }
 
         function handleMouseMove(e) {
           if (!isTouching) return;
           const rect = canvas.getBoundingClientRect();
+          
+          // 이전 마우스 위치 저장
+          const prevX = touchX;
+          const prevY = touchY;
+          
+          // 새 마우스 위치 업데이트
           touchX = e.clientX - rect.left;
           touchY = e.clientY - rect.top;
+          
+          // 좌표 변환: 화면 좌표를 캔버스 좌표로 변환
+          const canvasX = (touchX * canvas.width) / rect.width;
+          const canvasY = (touchY * canvas.height) / rect.height;
+          
+          // 이전 터치와의 거리 계산
+          if (lastTouchX !== null && lastTouchY !== null) {
+            const deltaX = canvasX - lastTouchX;
+            const deltaY = canvasY - lastTouchY;
+            
+            // 비율에 맞게 이동 속도 적용
+            player.x += deltaX;
+            player.y += deltaY;
+            
+            // 경계 확인
+            player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+            
+            // 움직인 거리 누적
+            touchMoveDistance += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          }
+          
+          // 현재 위치를 다음 계산을 위해 저장
+          lastTouchX = canvasX;
+          lastTouchY = canvasY;
         }
 
         function handleMouseUp() {
           isTouching = false;
+          lastTouchX = null;
+          lastTouchY = null;
         }
 
         window.addEventListener("keydown", e => {
@@ -473,33 +580,22 @@
             this.h  = PLAYER_SIZE;
             this.x  = canvas.width/2 - this.w/2;
             this.y  = canvas.height - this.h - 10;
-            this.sp = 5;
           }
+          
           move() {
-            // 터치/마우스 드래그로 이동 (모바일)
-            if (isTouching && touchX !== null && touchY !== null) {
-              const targetX = touchX - this.w / 2;
-              const targetY = touchY - this.h / 2;
-              
-              // 부드러운 이동을 위한 보간
-              this.x += (targetX - this.x) * 0.1;
-              this.y += (targetY - this.y) * 0.1;
-              
-              // 경계 확인
-              this.x = Math.max(0, Math.min(canvas.width - this.w, this.x));
-              this.y = Math.max(0, Math.min(canvas.height - this.h, this.y));
-            }
-            
-            // 키보드로 이동 (웹)
+            // 키보드로 이동 (상하좌우 균등한 속도로)
             if (keys["ArrowLeft"] && this.x > 0)
-              this.x -= this.sp;
+              this.x -= moveSpeedX;
             if (keys["ArrowRight"] && this.x < canvas.width - this.w)
-              this.x += this.sp;
+              this.x += moveSpeedX;
             if (keys["ArrowUp"] && this.y > 0)
-              this.y -= this.sp;
+              this.y -= moveSpeedY;
             if (keys["ArrowDown"] && this.y < canvas.height - this.h)
-              this.y += this.sp;
+              this.y += moveSpeedY;
+            
+            // 터치/마우스는 handleTouchMove와 handleMouseMove에서 처리됨
           }
+          
           draw() {
             // 이미지가 로드 안됐으면 기본 사각형으로 표시
             if (IMG.p && IMG.p.complete) {
@@ -617,11 +713,14 @@
           lastItemTime   = startTime;
           lastShotTime   = startTime;
           
+          // 화면 비율에 따른 이동 속도 조정
+          updateCanvasRatio();
+          
           // 게임 캔버스 페이드 인 효과
           canvas.style.opacity = 0;
           
-          // 로딩 화면 페이드 아웃 후 게임 화면 페이드 인
-          if (loadingScreen) {
+          // 로딩 화면이 보이는 경우 페이드 아웃
+          if (loadingScreen && loadingScreen.style.display === "flex") {
             let loadingOpacity = 1;
             const fadeOutInterval = setInterval(() => {
               loadingOpacity -= 0.05;
@@ -630,42 +729,34 @@
               if (loadingOpacity <= 0) {
                 clearInterval(fadeOutInterval);
                 loadingScreen.style.display = "none";
-                
-                // 게임 캔버스 페이드 인
-                let canvasOpacity = 0;
-                const fadeInInterval = setInterval(() => {
-                  canvasOpacity += 0.05;
-                  canvas.style.opacity = canvasOpacity;
-                  
-                  if (canvasOpacity >= 1) {
-                    clearInterval(fadeInInterval);
-                  }
-                }, 30);
-                
-                // 게임 시작
-                requestAnimationFrame(gameLoop);
+                fadeInCanvas();
               }
             }, 30);
           } else {
-            // 로딩 화면이 없는 경우 바로 게임 캔버스 페이드 인
-            let canvasOpacity = 0;
-            const fadeInInterval = setInterval(() => {
-              canvasOpacity += 0.05;
-              canvas.style.opacity = canvasOpacity;
-              
-              if (canvasOpacity >= 1) {
-                clearInterval(fadeInInterval);
-              }
-            }, 30);
-            
-            // 재시작 버튼 숨기기
-            if (restartBtn) {
-              restartBtn.style.display = "none";
-            }
-            
-            // 게임 시작
-            requestAnimationFrame(gameLoop);
+            // 로딩 화면이 안 보이는 경우 바로 캔버스 페이드 인
+            fadeInCanvas();
           }
+        }
+        
+        // 캔버스 페이드 인 함수
+        function fadeInCanvas() {
+          let canvasOpacity = 0;
+          const fadeInInterval = setInterval(() => {
+            canvasOpacity += 0.05;
+            canvas.style.opacity = canvasOpacity;
+            
+            if (canvasOpacity >= 1) {
+              clearInterval(fadeInInterval);
+            }
+          }, 30);
+          
+          // 재시작 버튼 숨기기
+          if (restartBtn) {
+            restartBtn.style.display = "none";
+          }
+          
+          // 게임 시작
+          requestAnimationFrame(gameLoop);
         }
 
         // --- 9) 화면 그리기 헬퍼 ---
@@ -806,44 +897,9 @@
           requestAnimationFrame(gameLoop);
         }
 
-        // 페이지 로드 완료 시 초기화
+        // 페이지 로드 완료 시 인트로 시작
         window.addEventListener('load', function() {
           console.log("페이지 로드 완료");
-          
-          // 모바일 디바이스 감지 및 UI 힌트 표시
-          if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-            // 모바일 디바이스일 경우 수행할 작업
-            const touchHint = document.createElement('div');
-            touchHint.id = 'touchHint';
-            touchHint.innerHTML = '👆 화면을 터치하고 드래그하여 비행기를 이동하세요';
-            touchHint.style.position = 'fixed';
-            touchHint.style.bottom = '20vh';
-            touchHint.style.left = '0';
-            touchHint.style.width = '100%';
-            touchHint.style.textAlign = 'center';
-            touchHint.style.color = 'white';
-            touchHint.style.fontSize = '16px';
-            touchHint.style.padding = '10px';
-            touchHint.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            touchHint.style.zIndex = '100';
-            touchHint.style.opacity = '0';
-            touchHint.style.transition = 'opacity 1s ease';
-            
-            document.body.appendChild(touchHint);
-            
-            // 게임 시작 후 힌트 표시 및 자동 숨김
-            setTimeout(() => {
-              touchHint.style.opacity = '1';
-              setTimeout(() => {
-                touchHint.style.opacity = '0';
-                setTimeout(() => {
-                  touchHint.remove();
-                }, 1000);
-              }, 5000);
-            }, 3000);
-          }
-          
-          // 인트로 시작
           playIntro();
         });
     </script>
